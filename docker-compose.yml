@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Database Service: PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: nse_postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-nse_platform}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nse_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Core Backend & Web Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nse_trading_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nse_platform}
+      - ENVIRONMENT=production
+      - DEBUG=False
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - ZERODHA_API_KEY=${ZERODHA_API_KEY}
+      - ZERODHA_API_SECRET=${ZERODHA_API_SECRET}
+      - GG_API_KEY=${GG_API_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./frontend:/app/frontend
+
+volumes:
+  postgres_data:
